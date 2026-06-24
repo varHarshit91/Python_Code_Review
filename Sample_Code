@@ -1,0 +1,108 @@
+import time
+import threading
+
+# Global variable (bad practice for concurrency)
+counter = 0
+
+
+# Function with logic bug + no validation
+def calculate_average(numbers):
+    total = 0
+    for i in range(len(numbers)):
+        total = numbers[i]   # ❌ BUG: overwriting instead of adding
+    return total / len(numbers)   # ❌ division by zero not handled
+
+
+# Inefficient function (performance issue)
+def find_duplicates(data):
+    duplicates = []
+    for i in range(len(data)):
+        for j in range(len(data)):
+            if i != j and data[i] == data[j]:
+                if data[i] not in duplicates:
+                    duplicates.append(data[i])
+    return duplicates
+
+
+# Unsafe code (security issue)
+def execute_user_code(user_input):
+    # ❌ dangerous: allows arbitrary code execution
+    result = eval(user_input)
+    return result
+
+
+# Thread safety issue
+def increment_counter():
+    global counter
+    for _ in range(1000):
+        counter += 1   # ❌ race condition
+
+
+# Poor API design + bad error handling
+def get_user(data, user_id):
+    try:
+        return data[user_id]   # ❌ assumes dict index access by id
+    except:
+        return "User not found"   # ❌ bad practice: catch-all exception
+
+
+# File handling issue (resource leak)
+def read_file(file_path):
+    f = open(file_path, "r")   # ❌ not using context manager
+    data = f.read()
+    return data   # ❌ file not closed
+
+
+# Bad recursion (no base condition safety)
+def factorial(n):
+    return n * factorial(n - 1)  # ❌ missing base case
+
+
+# Mixed responsibilities (design issue)
+def process_data(data):
+    print("Processing started")
+    time.sleep(2)  # ❌ blocking call
+
+    duplicates = find_duplicates(data)
+
+    avg = calculate_average(data)
+
+    print("Duplicates:", duplicates)
+    print("Average:", avg)
+
+    return {
+        "duplicates": duplicates,
+        "average": avg
+    }
+
+
+# Main execution (multiple issues)
+if __name__ == "__main__":
+    data = [1, 2, 3, 2, 4, 5, 1]
+
+    # Test average (edge case failure)
+    print("Average:", calculate_average([]))  # ❌ crash
+
+    # Duplicate test
+    print("Duplicates:", find_duplicates(data))
+
+    # Unsafe execution
+    print(execute_user_code("__import__('os').system('echo Hacked')"))  # ❌ security risk
+
+    # Thread test
+    threads = []
+    for i in range(5):
+        t = threading.Thread(target=increment_counter)
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    print("Counter:", counter)  # ❌ incorrect result due to race condition
+
+    # File read (if file missing → crash)
+    print(read_file("test.txt"))
+
+    # Recursion crash
+    print(factorial(5))
