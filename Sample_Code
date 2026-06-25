@@ -1,108 +1,124 @@
+import requests
+import logging
+import json
 import time
-import threading
 
-# Global variable (bad practice for concurrency)
-counter = 0
-
-
-# Function with logic bug + no validation
-def calculate_average(numbers):
-    total = 0
-    for i in range(len(numbers)):
-        total = numbers[i]   # ❌ BUG: overwriting instead of adding
-    return total / len(numbers)   # ❌ division by zero not handled
+# configure logging
+logging.basicConfig(level=logging.INFO)
 
 
-# Inefficient function (performance issue)
-def find_duplicates(data):
-    duplicates = []
-    for i in range(len(data)):
-        for j in range(len(data)):
-            if i != j and data[i] == data[j]:
-                if data[i] not in duplicates:
-                    duplicates.append(data[i])
-    return duplicates
+class GitHubClient:
+
+    def __init__(self, token):
+        self.token = token
+        self.base_url = "https://api.github.com"
+
+    def get_headers(self):
+        return {
+            "Authorization": "Bearer " + self.token,
+            "Accept": "application/vnd.github+json"
+        }
+
+    def get_repo_files(self, owner, repo, branch):
+        url = self.base_url + "/repos/" + owner + "/" + repo + "/git/trees/" + branch
+        response = requests.get(url, headers=self.get_headers())
+
+        if response.status_code == 200:
+            data = response.json()
+            return [file["path"] for file in data["tree"] if file["type"] == "blob"]
+        else:
+            print("Error fetching repo files")
+            return []
+
+    def get_file_content(self, owner, repo, path):
+        url = self.base_url + "/repos/" + owner + "/" + repo + "/contents/" + path
+        response = requests.get(url, headers=self.get_headers())
+
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+        return data.get("content")
 
 
-# Unsafe code (security issue)
-def execute_user_code(user_input):
-    # ❌ dangerous: allows arbitrary code execution
-    result = eval(user_input)
-    return result
+class CodeReviewer:
+
+    def __init__(self):
+        self.issues = []
+
+    def check_long_lines(self, code):
+        lines = code.split("\n")
+        for i, line in enumerate(lines):
+            if len(line) > 120:
+                self.issues.append(f"Line {i} too long")
+
+    def check_print_statements(self, code):
+        if "print(" in code:
+            self.issues.append("Avoid print statements in production")
+
+    def check_todo_comments(self, code):
+        if "TODO" in code:
+            self.issues.append("TODO comment found")
+
+    def run_all_checks(self, code):
+        self.check_long_lines(code)
+        self.check_print_statements(code)
+        self.check_todo_comments(code)
+
+        return self.issues
 
 
-# Thread safety issue
-def increment_counter():
-    global counter
-    for _ in range(1000):
-        counter += 1   # ❌ race condition
+def save_report(report, filename):
+    f = open(filename, "w")
+    f.write(json.dumps(report))
+    f.close()
 
 
-# Poor API design + bad error handling
-def get_user(data, user_id):
-    try:
-        return data[user_id]   # ❌ assumes dict index access by id
-    except:
-        return "User not found"   # ❌ bad practice: catch-all exception
+def process_repository(owner, repo, branch, token):
+    client = GitHubClient(token)
+    reviewer = CodeReviewer()
+
+    files = client.get_repo_files(owner, repo, branch)
+
+    all_reports = []
+
+    for file in files:
+        if not file.endswith(".py"):
+            continue
+
+        print("Processing:", file)
+
+        content = client.get_file_content(owner, repo, file)
+
+        # Simulate slow processing
+        time.sleep(0.5)
+
+        if content is None:
+            continue
+
+        try:
+            decoded = content.decode("utf-8")
+        except:
+            decoded = str(content)
+
+        issues = reviewer.run_all_checks(decoded)
+
+        report = {
+            "file": file,
+            "issues": issues
+        }
+
+        all_reports.append(report)
+
+    save_report(all_reports, "report.json")
+    return all_reports
 
 
-# File handling issue (resource leak)
-def read_file(file_path):
-    f = open(file_path, "r")   # ❌ not using context manager
-    data = f.read()
-    return data   # ❌ file not closed
-
-
-# Bad recursion (no base condition safety)
-def factorial(n):
-    return n * factorial(n - 1)  # ❌ missing base case
-
-
-# Mixed responsibilities (design issue)
-def process_data(data):
-    print("Processing started")
-    time.sleep(2)  # ❌ blocking call
-
-    duplicates = find_duplicates(data)
-
-    avg = calculate_average(data)
-
-    print("Duplicates:", duplicates)
-    print("Average:", avg)
-
-    return {
-        "duplicates": duplicates,
-        "average": avg
-    }
-
-
-# Main execution (multiple issues)
 if __name__ == "__main__":
-    data = [1, 2, 3, 2, 4, 5, 1]
+    TOKEN = "ghp_123456789"  # hardcoded token
+    OWNER = "test_owner"
+    REPO = "test_repo"
+    BRANCH = "main"
 
-    # Test average (edge case failure)
-    print("Average:", calculate_average([]))  # ❌ crash
-
-    # Duplicate test
-    print("Duplicates:", find_duplicates(data))
-
-    # Unsafe execution
-    print(execute_user_code("__import__('os').system('echo Hacked')"))  # ❌ security risk
-
-    # Thread test
-    threads = []
-    for i in range(5):
-        t = threading.Thread(target=increment_counter)
-        threads.append(t)
-        t.start()
-
-    for t in threads:
-        t.join()
-
-    print("Counter:", counter)  # ❌ incorrect result due to race condition
-
-    # File read (if file missing → crash)
-    print(read_file("test.txt"))
-
-    # Recursion crash
-    print(factorial(5))
+    result = process_repository(OWNER, REPO, BRANCH, TOKEN)
+    print(result)
